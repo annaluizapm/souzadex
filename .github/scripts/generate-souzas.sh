@@ -13,7 +13,10 @@ if [ -f souzas.js ]; then
   while IFS= read -r line; do
     file=$(sed -n 's/.*file: "\([^"]*\)".*/\1/p' <<<"$line")
     [ -z "$file" ] && continue
-    if [ -e "assets/images/$file" ]; then
+    # git ls-files em vez de [ -e ]: é case-sensitive mesmo em filesystem
+    # case-insensitive (Windows/mac), senão entradas de arquivos renomeados
+    # para minúsculo sobrevivem e duplicam.
+    if git ls-files --error-unmatch "assets/images/$file" >/dev/null 2>&1; then
       kept_lines+="$line"$'\n'
       known["$file"]=1
     fi
