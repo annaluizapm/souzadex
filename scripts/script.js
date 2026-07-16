@@ -1,8 +1,8 @@
 (function () {
   "use strict";
 
-  var SIZE_OPTIONS = [20, 40];
-  var DEFAULT_SIZE = 20;
+  var SIZE_OPTIONS = [20, 40, 60, 80];
+  var DEFAULT_SIZE = 40;
 
   var grid = document.getElementById("grid");
   var pagination = document.getElementById("pagination");
