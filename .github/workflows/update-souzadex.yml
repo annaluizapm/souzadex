@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: update-souzadex
+  cancel-in-progress: false
+
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -18,19 +22,54 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Gerar souzas.js
+      - name: Configurar git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # O rename precisa ser COMMITADO antes de gerar o souzas.js, senão o
+      # git log --follow não encontra o histórico do novo nome.
+      - name: Renomear imagens para minúsculo
+        run: |
+          renamed=0
+          shopt -s nullglob
+          for f in assets/images/*; do
+            base=$(basename "$f")
+            lower=$(echo "$base" | tr '[:upper:]' '[:lower:]')
+            if [ "$base" != "$lower" ]; then
+              if git ls-files --error-unmatch "assets/images/$lower" >/dev/null 2>&1; then
+                echo "aviso: assets/images/$lower já existe, pulando $base"
+                continue
+              fi
+              git mv "$f" "assets/images/$lower"
+              renamed=1
+            fi
+          done
+          if [ "$renamed" -eq 1 ]; then
+            git commit -m "chore: renomeia imagens para minusculo"
+          fi
+
+      - name: Gerar souzas.json
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash .github/scripts/generate-souzas.sh
 
-      - name: Commitar souzas.js atualizado
+      - name: Commitar e enviar mudanças
         run: |
-          if git diff --quiet souzas.js; then
-            echo "souzas.js já está atualizado."
+          if ! git diff --quiet souzas.json; then
+            git add souzas.json
+            git commit -m "chore: atualiza souzas.json"
+          fi
+          if [ "$(git rev-list --count origin/main..HEAD)" -eq 0 ]; then
+            echo "Nada para enviar."
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add souzas.js
-          git commit -m "chore: atualiza souzas.js"
+          # Se a main avançou durante a execução, rebaseia e tenta de novo.
+          for i in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            echo "Push rejeitado, rebaseando sobre origin/main (tentativa $i)..."
+            git pull --rebase origin main
+          done
           git push
